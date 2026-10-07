@@ -31,6 +31,9 @@
   </nav>
 
   <dialog id="sheet" class="sheet"></dialog>
+  <!-- حقل ملف ثابت في الصفحة: على iOS لا يصل حدث الاختيار لحقل منشأ خارج الصفحة،
+       وبلا accept لأن iOS قد يعطّل ملفات .json إن حُدّد النوع -->
+  <input type="file" id="import-file" class="sr-only" tabindex="-1" aria-hidden="true">
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </body>
 </html>

@@ -65,23 +65,33 @@ async function exportBackup() {
   toast('صُدّرت النسخة الاحتياطية');
 }
 
+const importInput = document.getElementById('import-file');
+
 function pickImportFile() {
-  const input = Object.assign(document.createElement('input'), { type: 'file', accept: '.json,application/json' });
-  input.addEventListener('change', async () => {
-    const f = input.files?.[0];
-    if (!f) return;
-    try {
-      const raw = JSON.parse(await f.text());
-      if (!(await db.isEmpty()) && !confirm('الاستيراد يستبدل كل البيانات الحالية على هذا الجهاز. متابعة؟')) return;
-      await db.importAll(raw);
-      await refresh();
-      toast(`استُورد ${state.items.length} بنداً و${state.debts.length} ديناً`);
-    } catch (e) {
-      alert(`تعذّر الاستيراد:\n${e.message}`);
-    }
-  });
-  input.click();
+  importInput.value = ''; // حتى يعمل اختيار الملف نفسه مرة ثانية
+  importInput.click();
 }
+
+importInput.addEventListener('change', async () => {
+  const f = importInput.files?.[0];
+  if (!f) return;
+  let raw;
+  try {
+    const text = (await f.text()).replace(/^﻿/, '');
+    raw = JSON.parse(text);
+  } catch {
+    alert(`الملف "${f.name}" ليس نسخة احتياطية من التزاماتي.\nاختر ملفاً ينتهي بـ .json صدّرته الأداة.`);
+    return;
+  }
+  try {
+    if (!(await db.isEmpty()) && !confirm('الاستيراد يستبدل كل البيانات الحالية على هذا الجهاز. متابعة؟')) return;
+    await db.importAll(raw);
+    await refresh();
+    toast(`استُورد ${state.items.length} بنداً و${state.debts.length} ديناً`);
+  } catch (e) {
+    alert(`تعذّر الاستيراد:\n${e.message}`);
+  }
+});
 
 // ---- الأحداث ----
 
