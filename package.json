@@ -1,0 +1,10 @@
+{
+  "name": "iltizamat",
+  "private": true,
+  "type": "module",
+  "description": "مخطِّط الالتزامات الشهرية والدورية — بلا خادم، والبيانات على الجهاز",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "serve": "python3 -m http.server 8080"
+  }
+}

@@ -1,0 +1,10 @@
+# بيانات شخصية — لا تُرفع أبداً (SPEC §4)
+seed-data.json
+*.backup.json
+private/
+
+# بيئة
+node_modules/
+.DS_Store
+test-results/
+screenshots/
