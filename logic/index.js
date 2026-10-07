@@ -6,3 +6,4 @@ export * from './transfer.js';
 export * from './debts.js';
 export * from './emergency.js';
 export * from './backup.js';
+export * from './payments.js';

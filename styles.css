@@ -187,3 +187,45 @@ main { padding: 0 var(--gutter) 24px; max-inline-size: 640px; margin-inline: aut
 .toast.show { opacity: 1; transform: none; }
 
 .sr-only { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+
+/* ---- شاشة الدورة ---- */
+.cycle-range { margin: 0 4px 10px; color: var(--muted); font-size: 14px; }
+.progress { display: block; inline-size: 100%; block-size: 6px; margin: 12px 0 10px; }
+.progress-track { fill: color-mix(in srgb, var(--green) 18%, transparent); }
+.progress-fill { fill: var(--green); }
+.ritual-cta, .confirm-all { margin-top: 10px; }
+
+.check-row { grid-template-columns: auto 1fr; gap: 0; padding: 0; cursor: default; }
+.check-row:active { background: none; }
+.check-btn {
+  display: grid; place-items: center; inline-size: 52px; align-self: stretch;
+  border: 0; background: none; cursor: pointer; padding: 0 12px 0 4px;
+}
+.check-btn svg { inline-size: 26px; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.check-btn circle { stroke: var(--line); stroke-width: 2; }
+.check-btn path { stroke: transparent; }
+.check-btn:hover circle { stroke: var(--green); }
+.check-row.done .check-btn circle { fill: var(--green); stroke: var(--green); }
+.check-row.done .check-btn path { stroke: #fff; }
+.row-body {
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px;
+  padding: 12px 14px 12px 0; border: 0; background: none; text-align: start; cursor: pointer; min-inline-size: 0;
+}
+.row-body:active { background: var(--field); }
+.check-row.done .row-name, .check-row.done .amount { color: var(--muted); }
+.amount.muted { color: var(--muted); font-weight: 400; }
+.group-empty { margin: 0; padding: 18px 14px; color: var(--muted); text-align: center; }
+
+/* ---- خطوات الطقس ---- */
+.steps { display: flex; gap: 6px; margin: 14px 0 4px; }
+.steps span { flex: 1; block-size: 4px; border-radius: 2px; background: var(--line); }
+.steps span.on { background: var(--green); }
+.step-title { margin: 14px 0 0; font-size: 20px; }
+.step-lead { margin: 4px 0 0; color: var(--muted); }
+.plan { margin-top: 16px; }
+.plan .row { cursor: default; grid-template-columns: 1fr auto; }
+.plan .row:active { background: none; }
+.plan input { inline-size: 120px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); text-align: end; font-weight: 600; }
+.warn { margin: 12px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--amber-soft); color: var(--ink); font-size: 14px; }
+.checklist { margin: 16px 0 0; padding: 0; list-style: none; }
+.checklist li { padding: 10px 0; border-bottom: 1px solid var(--line); }

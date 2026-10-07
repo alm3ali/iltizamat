@@ -5,7 +5,7 @@ import {
 
 const sheet = () => document.getElementById('sheet');
 
-function openSheet(title, body, { saveLabel = 'حفظ' } = {}) {
+export function openSheet(title, body, { saveLabel = 'حفظ' } = {}) {
   const d = sheet();
   d.innerHTML = `<form method="dialog" novalidate>
     <div class="sheet-head">
@@ -20,16 +20,16 @@ function openSheet(title, body, { saveLabel = 'حفظ' } = {}) {
   return d.querySelector('form');
 }
 
-const showError = (form, msg) => { const e = form.querySelector('.error'); e.textContent = msg; e.hidden = !msg; };
+export const showError = (form, msg) => { const e = form.querySelector('.error'); e.textContent = msg; e.hidden = !msg; };
 
 const segmented = (name, options, value) => `<div class="segmented" role="radiogroup">${
   Object.entries(options).map(([v, label]) => `<label><input type="radio" name="${name}" value="${esc(v)}" ${v === String(value) ? 'checked' : ''}><span>${label}</span></label>`).join('')
 }</div>`;
 
-const field = (label, control, { hint, attrs = '' } = {}) =>
+export const field = (label, control, { hint, attrs = '' } = {}) =>
   `<label class="field" ${attrs}><span>${label}</span>${control}${hint ? `<small class="hint">${hint}</small>` : ''}</label>`;
 
-const numInput = (name, value, extra = '') =>
+export const numInput = (name, value, extra = '') =>
   `<input name="${name}" type="text" inputmode="decimal" dir="ltr" value="${value ?? ''}" ${extra}>`;
 
 /** يقبل الأرقام العربية والفاصلة العشرية العربية. */

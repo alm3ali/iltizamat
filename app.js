@@ -2,9 +2,11 @@
 import * as db from './store/db.js';
 import { renderItems } from './ui/items-view.js';
 import { openItemForm, openDebtForm, openSettingsForm } from './ui/forms.js';
-import { todayISO } from './logic/index.js';
+import { renderCycle, cycleModel } from './ui/cycle-view.js';
+import { openOccurrenceSheet, openRitual } from './ui/cycle-sheets.js';
+import { todayISO, settleOccurrence, undoOccurrence } from './logic/index.js';
 
-const state = { tab: 'items', settings: null, items: [], debts: [], occurrences: [], payments: [], cycles: [] };
+const state = { tab: 'cycle', settings: null, items: [], debts: [], occurrences: [], payments: [], cycles: [] };
 const view = document.getElementById('view');
 const TITLES = { cycle: 'هذه الدورة', upcoming: 'القادم', items: 'البنود' };
 
@@ -26,7 +28,7 @@ function render() {
     if (b.dataset.tab === state.tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
   if (state.tab === 'items') view.innerHTML = renderItems(state);
-  else if (state.tab === 'cycle') view.innerHTML = placeholder('قيد البناء', 'هنا ستظهر استحقاقات هذه الدورة مع مربعات التأشير، والتحويل الموصى به لحساب الالتزامات.');
+  else if (state.tab === 'cycle') view.innerHTML = renderCycle(state, todayISO());
   else view.innerHTML = placeholder('قيد البناء', 'هنا سيظهر الخط الزمني للأشهر الـ12 القادمة ومنحنى رصيد حساب الالتزامات.');
 }
 
@@ -93,6 +95,65 @@ importInput.addEventListener('change', async () => {
   }
 });
 
+// ---- الدورة: السداد والتخطي والتراجع ----
+
+const findRow = (key) => cycleModel(state, todayISO()).rows.find((r) => r.key === key);
+
+async function settle(r, { amount, status }) {
+  const item = state.items.find((i) => i.id === r.itemId);
+  if (!item) return;
+  const res = settleOccurrence({ item, occ: r, amount, nowISO: todayISO(), status });
+  await db.putMany({ items: [res.item], occurrences: [res.occurrence], payments: res.payment ? [res.payment] : [] });
+  await refresh();
+}
+
+async function undo(r) {
+  const u = undoOccurrence(r.stored);
+  if (u.item) await db.put('items', u.item);
+  await db.remove('occurrences', u.removeOccurrenceId);
+  await db.remove('payments', u.removePaymentId);
+  await refresh();
+  toast('تراجعت');
+}
+
+const occHandlers = {
+  onPay: (r, amount) => settle(r, { amount, status: 'paid' }).then(() => toast('سُدّد')),
+  onSkip: (r) => settle(r, { status: 'skipped' }).then(() => toast('تُخطّي هذه المرة')),
+  onUndo: undo,
+};
+
+async function toggle(key) {
+  const r = findRow(key);
+  if (!r) return;
+  if (r.status !== 'open') return undo(r);
+  if (r.item?.amountMode === 'variable' || r.expectedAmount == null) return openOccurrenceSheet(r, occHandlers);
+  await settle(r, { amount: r.expectedAmount, status: 'paid' });
+}
+
+async function confirmFixed() {
+  const { rows } = cycleModel(state, todayISO());
+  const ready = rows.filter((r) => r.status === 'open' && r.item?.amountMode !== 'variable' && r.expectedAmount != null);
+  if (!ready.length || !confirm(`تأشير ${ready.length} بنود ثابتة كمسددة اليوم؟`)) return;
+  const now = todayISO();
+  const batch = { items: [], occurrences: [], payments: [] };
+  for (const r of ready) {
+    const item = batch.items.find((i) => i.id === r.itemId) ?? state.items.find((i) => i.id === r.itemId);
+    const res = settleOccurrence({ item, occ: r, amount: r.expectedAmount, nowISO: now, status: 'paid' });
+    batch.items = [...batch.items.filter((i) => i.id !== res.item.id), res.item];
+    batch.occurrences.push(res.occurrence);
+    batch.payments.push(res.payment);
+  }
+  await db.putMany(batch);
+  await refresh();
+  toast(`سُدّد ${ready.length} بنود`);
+}
+
+function startRitual() {
+  openRitual(state, todayISO(), {
+    onFinish: async (cycle) => { await db.put('cycles', cycle); await refresh(); toast('بدأت الدورة'); },
+  });
+}
+
 // ---- الأحداث ----
 
 const itemHandlers = {
@@ -116,6 +177,10 @@ view.addEventListener('click', (e) => {
     case 'new-debt': return openDebtForm(null, debtHandlers());
     case 'edit-debt': return openDebtForm(state.debts.find((d) => d.id === id), debtHandlers());
     case 'import': return pickImportFile();
+    case 'toggle': return toggle(el.dataset.key);
+    case 'occ': { const r = findRow(el.dataset.key); if (r) openOccurrenceSheet(r, occHandlers); return; }
+    case 'confirm-fixed': return confirmFixed();
+    case 'ritual': return startRitual();
   }
 });
 
@@ -137,7 +202,15 @@ document.getElementById('open-settings').addEventListener('click', () => openSet
 // إغلاق الورقة عند الضغط خارجها
 document.getElementById('sheet').addEventListener('click', (e) => { if (e.target.id === 'sheet') e.target.close(); });
 
-refresh().catch((e) => {
+let ritualOffered = false;
+/** يفتح طقس الراتب تلقائياً مرة واحدة في الأيام السبعة الأولى من دورة لم تبدأ بعد. */
+function maybeOfferRitual() {
+  if (ritualOffered || state.tab !== 'cycle' || !state.items.length) return;
+  const m = cycleModel(state, todayISO());
+  if (!m.record && m.daysIntoCycle <= 7) { ritualOffered = true; startRitual(); }
+}
+
+refresh().then(maybeOfferRitual).catch((e) => {
   view.innerHTML = '<div class="empty"><h2>تعذّر فتح البيانات</h2><p></p></div>';
   view.querySelector('p').textContent = e.message;
 });
