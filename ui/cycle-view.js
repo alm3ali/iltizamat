@@ -1,7 +1,7 @@
 // شاشة "هذه الدورة" (SPEC §7.1).
 import { esc, money, fmtNum, fmtDate } from './format.js';
 import {
-  cycleRows, currentCycleId, computeTransfer, buildHistory, diffDays,
+  cycleRows, currentCycleId, forecast, diffDays,
 } from '../logic/index.js';
 
 const shortDate = new Intl.DateTimeFormat('ar-SA-u-ca-gregory-nu-latn', { day: 'numeric', month: 'long', timeZone: 'UTC' });
@@ -12,7 +12,7 @@ export function cycleModel(state, todayISO) {
   const { items, occurrences: stored, settings, cycles } = state;
   const cycleId = currentCycleId(todayISO, settings.salaryDay, cycles);
   const record = cycles.find((c) => c.id === cycleId) ?? null;
-  const model = cycleRows({ items, stored, settings, cycleId, todayISO });
+  const model = cycleRows({ items, stored, settings, cycleId, todayISO, cycles });
   return { ...model, record, cycleId, daysIntoCycle: diffDays(model.cycle.start, todayISO) };
 }
 
@@ -69,8 +69,7 @@ export function renderCycle(state, todayISO) {
       <p>سُدّد ${fmtNum(totals.paid)} من ${fmtNum(totals.total)} ر.س، والمتبقي ${fmtNum(totals.remaining)}.</p>
     </div>`;
   } else {
-    const paidKeys = new Set(state.occurrences.map((o) => o.id));
-    const t = computeTransfer({ items: state.items, settings: state.settings, fromISO: cycle.start, paidKeys, history: buildHistory(state.occurrences) });
+    const { t } = forecast({ items: state.items, settings: state.settings, stored: state.occurrences, cycles: state.cycles, todayISO });
     card = `<div class="summary">
       <p>التحويل الموصى به لحساب الالتزامات</p>
       <span class="big">${fmtNum(t.recommended)} <small>ر.س</small></span>

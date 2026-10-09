@@ -84,10 +84,30 @@ export function undoOccurrence(occurrence) {
 }
 
 /**
+ * المتأخر المنقول: استحقاقات شهرية من الدورة السابقة لم تُسدَّد ولم تُتخطَّ.
+ * تُنقل فقط إن كانت الدورة السابقة مُتابَعة (لها سجل من طقس الراتب)، حتى لا يظهر
+ * ما سُدّد قبل استخدام الأداة متأخراً. الدوري لا يحتاج نقلاً: موعده يبقى حتى يُسدَّد.
+ */
+export function carriedOverdue({ items, stored, settings, cycleId, cycles = [] }) {
+  const prev = shiftCycle(cycleId, -1);
+  if (!cycles.some((c) => c.id === prev)) return [];
+  const range = cycleRange(prev, settings.salaryDay);
+  const monthly = items.filter((i) => i.intervalMonths === 1 && i.calendar !== 'hijri' && i.nextDue !== 'now'
+    && i.account === 'obligations' && (!i.createdAt || i.createdAt.slice(0, 10) <= range.end));
+  const storedKeys = new Set(stored.map((o) => o.id));
+  const { occurrences } = generateOccurrences(monthly, range.start, 1, {
+    salaryDay: settings.salaryDay, history: buildHistory(stored),
+  });
+  return occurrences
+    .filter((o) => o.cycleId === prev && !storedKeys.has(o.key))
+    .map((o) => ({ ...o, cycleId, overdue: true, carriedFrom: prev }));
+}
+
+/**
  * صفوف دورة واحدة لحساب الالتزامات: غير المسدد (مولَّد) + المسدد/المتخطى (مخزّن).
  * @returns {{ cycle, rows, totals }}
  */
-export function cycleRows({ items, stored, settings, cycleId, todayISO }) {
+export function cycleRows({ items, stored, settings, cycleId, todayISO, cycles = [] }) {
   const cycle = cycleRange(cycleId, settings.salaryDay);
   const history = buildHistory(stored);
   const byId = new Map(items.map((i) => [i.id, i]));
@@ -95,14 +115,16 @@ export function cycleRows({ items, stored, settings, cycleId, todayISO }) {
   const storedKeys = new Set(stored.map((o) => o.id));
 
   const { occurrences } = generateOccurrences(items, cycle.start, 1, { salaryDay: settings.salaryDay, history });
-  const open = occurrences
+  const carried = carriedOverdue({ items, stored, settings, cycleId, cycles })
+    .map((o) => ({ ...o, item: byId.get(o.itemId), status: 'open', dated: true, late: true }));
+  const open = [...carried, ...occurrences
     .filter((o) => o.account === 'obligations' && o.cycleId === cycleId && !storedKeys.has(o.key))
     .map((o) => {
       const item = byId.get(o.itemId);
       // بند بلا يوم محدد يستحق "خلال الدورة"، فلا يُعدّ متأخراً قبل نهايتها
       const dated = item.dueDay != null || item.calendar === 'hijri' || Boolean(item.nextDue && item.nextDue !== 'now');
       return { ...o, item, status: 'open', dated, late: o.overdue || (dated ? o.dueDate < todayISO : cycle.end < todayISO) };
-    });
+    })];
   const done = storedHere.map((o) => ({
     key: o.id, itemId: o.itemId, cycleId, dueDate: o.dueDate, expectedAmount: o.expectedAmount,
     actualAmount: o.actualAmount, status: o.status, paidAt: o.paidAt,

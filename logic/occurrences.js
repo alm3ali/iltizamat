@@ -31,7 +31,7 @@ export function dateInCycle(cycle, dueDay) {
  * @returns {{ occurrences: object[], unscheduled: object[] }}
  *   unscheduled = بنود دورية بلا موعد قادم معروف (تظهر في "للتأكد").
  */
-export function generateOccurrences(items, fromISO, months, { salaryDay, history = {} }) {
+export function generateOccurrences(items, fromISO, months, { salaryDay, history = {}, skipKeys = null }) {
   const cycles = cyclesFrom(fromISO, salaryDay, months);
   const horizonStart = cycles[0].start;
   const horizonEnd = cycles[cycles.length - 1].end;
@@ -59,6 +59,8 @@ export function generateOccurrences(items, fromISO, months, { salaryDay, history
     let limit = item.remainingCount ?? Infinity;
     const take = (dueDate, extra) => {
       if (limit <= 0) return false;
+      // استحقاق مسدد/متخطى: لا يُولَّد ولا يستهلك العدد المتبقي (العدّاد نقص عند السداد)
+      if (skipKeys?.has(occurrenceKey(item.id, dueDate))) return true;
       if (push(dueDate, extra)) { limit -= 1; return true; }
       return false;
     };

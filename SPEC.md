@@ -124,6 +124,10 @@
   status: "active" | "paused" | "to_verify" | "ended",
   note: string,
   sinkingBalance: number,         // رصيد صندوق الإغراق الافتراضي للبنود الدورية (المرحلة 3)
+  sinkingThrough: cycleId | null, // آخر دورة أُضيفت مساهمتها للصندوق (يمنع التكرار ويستدرك الفائت)
+  sourceItemId: id | null,        // لبنود recovery: بند الطارئ الذي تعوّضه
+  emergency: bool,                // بند one_time أنشأه زر الطارئ
+  freedDecision: "debt" | "kept" | null, // للقسط المنتهي: هل وُجّه مبلغه للديون
   createdAt, updatedAt
 }
 ```

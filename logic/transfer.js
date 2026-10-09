@@ -41,16 +41,24 @@ export function sinkingStatus(item, nextDueCycleIndex) {
  * @param {number}   [p.openingBalance] رصيد حساب الالتزامات الحالي (B0)
  * @param {Set}      [p.paidKeys]     مفاتيح الاستحقاقات المسددة (تُستبعد)
  * @param {object}   [p.history]      itemId → [مبالغ فعلية]
+ * @param {object[]} [p.extraOccurrences] متأخرات منقولة من الدورة السابقة (تُضاف للدورة الأولى)
+ * @param {boolean}  [p.firstTransferDone] حُوِّل للدورة الأولى فعلاً (الرصيد يشمله)، فالموصى به يبدأ من الثانية
  */
-export function computeTransfer({ items, settings, fromISO, openingBalance = 0, paidKeys = new Set(), history = {} }) {
+export function computeTransfer({
+  items, settings, fromISO, openingBalance = 0, paidKeys = new Set(), history = {},
+  extraOccurrences = [], firstTransferDone = false,
+}) {
   const months = settings.forecastMonths ?? 12;
   const buffer = settings.obligationsBuffer ?? 0;
   const extra = settings.debtExtraMonthly ?? 0;
   const { occurrences, unscheduled, cycles } = generateOccurrences(items, fromISO, months, {
-    salaryDay: settings.salaryDay, history,
+    salaryDay: settings.salaryDay, history, skipKeys: paidKeys,
   });
 
-  const obligations = occurrences.filter((o) => o.account === 'obligations' && !paidKeys.has(o.key));
+  const obligations = [
+    ...extraOccurrences.map((o) => ({ ...o, cycleId: cycles[0].id })),
+    ...occurrences.filter((o) => o.account === 'obligations' && !paidKeys.has(o.key)),
+  ];
   const incomplete = new Set(obligations.filter((o) => o.expectedAmount == null).map((o) => o.itemId));
 
   const bonus = settings.bonus;
@@ -65,11 +73,14 @@ export function computeTransfer({ items, settings, fromISO, openingBalance = 0, 
   });
 
   // minimalTransfer = max_k ((Σ_{i≤k} D_i) + buffer − B0) / k
+  // وإن حُوِّل للدورة الأولى فعلاً، فعدد التحويلات القادمة حتى الدورة k هو k − 1
+  const offset = firstTransferDone ? 1 : 0;
   let cum = 0;
   let minimal = 0;
   perCycle.forEach((c, i) => {
     cum += c.net;
-    minimal = Math.max(minimal, (cum + buffer - openingBalance) / (i + 1));
+    const k = i + 1 - offset;
+    if (k > 0) minimal = Math.max(minimal, (cum + buffer - openingBalance) / k);
   });
   minimal = round2(minimal);
 
@@ -78,8 +89,8 @@ export function computeTransfer({ items, settings, fromISO, openingBalance = 0, 
 
   // منحنى الرصيد المتوقع
   let bal = openingBalance;
-  for (const c of perCycle) {
-    bal = round2(bal + recommended - c.net);
+  for (const [i, c] of perCycle.entries()) {
+    bal = round2(bal + (i < offset ? 0 : recommended) - c.net);
     c.balanceAfter = bal;
     c.belowBuffer = bal < buffer;
   }
@@ -93,6 +104,9 @@ export function computeTransfer({ items, settings, fromISO, openingBalance = 0, 
     steadyState: steady,
     recommended,
     deficit: minimal > steady,
+    firstTransferDone,
+    openingBalance,
+    lowest: perCycle.reduce((lo, c) => (lo == null || c.balanceAfter < lo.balanceAfter ? c : lo), null),
     income,
     ratioTarget,
     ratioDiff: round2(ratioTarget - recommended),

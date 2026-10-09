@@ -4,7 +4,11 @@ import { renderItems } from './ui/items-view.js';
 import { openItemForm, openDebtForm, openSettingsForm } from './ui/forms.js';
 import { renderCycle, cycleModel } from './ui/cycle-view.js';
 import { openOccurrenceSheet, openRitual } from './ui/cycle-sheets.js';
-import { todayISO, settleOccurrence, undoOccurrence } from './logic/index.js';
+import { renderUpcoming, showCurvePoint } from './ui/upcoming-view.js';
+import { openEmergencySheet } from './ui/emergency-sheet.js';
+import {
+  todayISO, settleOccurrence, undoOccurrence, accrueSinking, planEmergency, emergencyContext, round2,
+} from './logic/index.js';
 
 const state = { tab: 'cycle', settings: null, items: [], debts: [], occurrences: [], payments: [], cycles: [] };
 const view = document.getElementById('view');
@@ -17,11 +21,6 @@ async function load() {
   Object.assign(state, { settings, items, debts, occurrences, payments, cycles });
 }
 
-function placeholder(title, text) {
-  return `<div class="empty"><h2>${title}</h2><p>${text}</p>
-    <button class="btn" type="button" data-tab-go="items">اذهب إلى البنود</button></div>`;
-}
-
 function render() {
   document.getElementById('screen-title').textContent = TITLES[state.tab];
   document.querySelectorAll('.tabbar button').forEach((b) => {
@@ -29,7 +28,7 @@ function render() {
   });
   if (state.tab === 'items') view.innerHTML = renderItems(state);
   else if (state.tab === 'cycle') view.innerHTML = renderCycle(state, todayISO());
-  else view.innerHTML = placeholder('قيد البناء', 'هنا سيظهر الخط الزمني للأشهر الـ12 القادمة ومنحنى رصيد حساب الالتزامات.');
+  else view.innerHTML = renderUpcoming(state, todayISO());
 }
 
 async function refresh() { await load(); render(); }
@@ -150,8 +149,42 @@ async function confirmFixed() {
 
 function startRitual() {
   openRitual(state, todayISO(), {
-    onFinish: async (cycle) => { await db.put('cycles', cycle); await refresh(); toast('بدأت الدورة'); },
+    onFinish: async (cycle) => {
+      // بدء الدورة يضيف مساهمتها لكل صندوق إغراق
+      const items = accrueSinking(state.items, cycle.id, { salaryDay: state.settings.salaryDay, nowISO: todayISO() });
+      await db.putMany({ cycles: [cycle], items });
+      await refresh();
+      toast('بدأت الدورة');
+    },
   });
+}
+
+// ---- الطارئ ----
+
+function startEmergency() {
+  openEmergencySheet(state, todayISO(), {
+    onSave: async (e) => {
+      const ctx = emergencyContext({ settings: state.settings, cycles: state.cycles, todayISO: todayISO() });
+      const plan = planEmergency(e, { ...ctx, newId: () => crypto.randomUUID() });
+      await db.putMany(plan);
+      await refresh();
+      toast(e.mode === 'defer_debt' ? 'أُضيف إلى الديون' : 'سُجّل الطارئ');
+    },
+  });
+}
+
+// ---- قسط انتهى: توجيه مبلغه للديون ----
+
+async function decideFreed(id, toDebt) {
+  const item = state.items.find((i) => i.id === id);
+  if (!item) return;
+  if (toDebt) {
+    const s = { ...state.settings, debtExtraMonthly: round2((state.settings.debtExtraMonthly ?? 0) + item.amount) };
+    await db.saveSettings(s);
+  }
+  await db.put('items', { ...item, freedDecision: toDebt ? 'debt' : 'kept', updatedAt: new Date().toISOString() });
+  await refresh();
+  toast(toDebt ? `المبلغ الإضافي للديون صار ${state.settings.debtExtraMonthly} ر.س` : 'تم');
 }
 
 // ---- الأحداث ----
@@ -181,6 +214,9 @@ view.addEventListener('click', (e) => {
     case 'occ': { const r = findRow(el.dataset.key); if (r) openOccurrenceSheet(r, occHandlers); return; }
     case 'confirm-fixed': return confirmFixed();
     case 'ritual': return startRitual();
+    case 'curve-pt': return showCurvePoint(el);
+    case 'freed-debt': return decideFreed(id, true);
+    case 'freed-keep': return decideFreed(id, false);
   }
 });
 
@@ -198,6 +234,8 @@ document.getElementById('open-settings').addEventListener('click', () => openSet
   onImport: pickImportFile,
   onClear: async () => { await db.clearAll(); await refresh(); toast('مُسحت البيانات'); },
 }));
+
+document.getElementById('add-emergency').addEventListener('click', startEmergency);
 
 // إغلاق الورقة عند الضغط خارجها
 document.getElementById('sheet').addEventListener('click', (e) => { if (e.target.id === 'sheet') e.target.close(); });

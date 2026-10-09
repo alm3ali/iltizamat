@@ -3,7 +3,7 @@ import { openSheet, showError, field, numInput, parseNumber } from './forms.js';
 import { esc, fmtNum, fmtDate, needsVerify } from './format.js';
 import {
   cycleForSalary, cycleRange, computeTransfer, consumptionCheck, proposeTransfers, buildHistory,
-  cycleRows, totalIncome, diffDays,
+  cycleRows, totalIncome, diffDays, carriedOverdue,
 } from '../logic/index.js';
 
 const sheet = () => document.getElementById('sheet');
@@ -58,6 +58,7 @@ export function openRitual(state, todayISO, { onFinish }) {
     const paidKeys = new Set(state.occurrences.map((o) => o.id));
     const t = computeTransfer({
       items, settings, fromISO: cycle.start, openingBalance: ctx.opening ?? 0, paidKeys, history: buildHistory(state.occurrences),
+      extraOccurrences: carriedOverdue({ items, stored: state.occurrences, settings, cycleId, cycles: state.cycles }),
     });
     const envelopes = consumptionCheck(items, settings).envelopes;
     const p = proposeTransfers({ salary: ctx.salary, settings, recommended: ctx.obligations ?? t.recommended, envelopes });
@@ -98,7 +99,7 @@ export function openRitual(state, todayISO, { onFinish }) {
         ${p.consumptionShort ? `<p class="warn">الباقي للاستهلاك أقل من مجموع المظاريف بـ ${fmtNum(p.consumptionShort)} ر.س.</p>` : ''}
         ${t.incompleteItemIds.length ? `<p class="warn">${t.incompleteItemIds.length} بنود بلا مبلغ لم تدخل الحساب، فالرقم الفعلي أعلى.</p>` : ''}`;
     } else {
-      const rows = cycleRows({ items, stored: state.occurrences, settings, cycleId: c.cycleId, todayISO });
+      const rows = cycleRows({ items, stored: state.occurrences, settings, cycleId: c.cycleId, todayISO, cycles: state.cycles });
       const variable = rows.rows.filter((r) => r.status === 'open' && r.item?.amountMode === 'variable').length;
       const verify = items.filter((i) => i.status !== 'ended' && needsVerify(i)).length;
       const last = settings.lastBackupAt?.slice(0, 10);
